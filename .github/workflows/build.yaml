@@ -1,0 +1,10 @@
+name: Build and test Go package
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: action/checkout@v4
