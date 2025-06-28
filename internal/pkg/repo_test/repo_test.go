@@ -2,7 +2,6 @@ package repo_test
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -31,26 +30,26 @@ type User struct {
 }
 
 func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
-	pg, err := postgres.Run(context.Background(), "postgres:16-alpine",
+	ctx := context.Background()
+
+	pg, err := postgres.Run(ctx, "postgres:16-alpine",
 		postgres.WithInitScripts("../../../sql/pvd.sql"),
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
+		postgres.BasicWaitStrategies(),
 	)
 
 	if err != nil {
 		log.Panicf("Unable to create postgres container: %s", err.Error())
 	}
 
-	dbHost, err := pg.Host(context.Background())
+	connStr, err := pg.ConnectionString(ctx)
 	if err != nil {
-		log.Panicf("Unable to get postgres container host: %s", err.Error())
+		log.Panicf("Unable to get postgres conn str: %s", err.Error())
 	}
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=disable",
-		dbUser, dbPassword, dbHost, dbName)
-
-	conn, err := pgx.Connect(context.Background(), connStr)
+	conn, err := pgx.Connect(ctx, connStr)
 	if err != nil {
 		log.Panicf("Unable to connect to postgres container via %s: %s", connStr,
 			err.Error())
