@@ -33,7 +33,7 @@ func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
 	ctx := context.Background()
 
 	pg, err := postgres.Run(ctx, "postgres:16-alpine",
-		postgres.WithInitScripts("../../../sql/pvd.sql"),
+		postgres.WithInitScripts("../sql/pvd.sql"),
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
