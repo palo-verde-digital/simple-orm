@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5"
 	"github.com/palo-verde-digital/simple-orm/pkg/repo"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -21,9 +20,7 @@ const (
 )
 
 var (
-	pgContainer, pgHost = newPgContainer()
-	pgConn              = fmt.Sprintf("postgres://%s:%s@%s:5432/%s",
-		dbUser, dbPassword, pgHost, dbName)
+	pgContainer, pgConn = newPg()
 )
 
 type User struct {
@@ -33,37 +30,37 @@ type User struct {
 	lastSeen time.Time `column:"last_seen"`
 }
 
-func newPgContainer() (*postgres.PostgresContainer, string) {
-	ctx := context.Background()
-
-	pg, err := postgres.Run(ctx,
-		"postgres:16-alpine",
+func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
+	pg, err := postgres.Run(context.Background(), "postgres:16-alpine",
+		postgres.WithInitScripts("../../../sql/pvd.sql"),
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
-		postgres.WithInitScripts(),
 	)
 
 	if err != nil {
 		log.Panicf("Unable to create postgres container: %s", err.Error())
 	}
 
-	host, err := pg.Host(ctx)
-
+	dbHost, err := pg.Host(context.Background())
 	if err != nil {
 		log.Panicf("Unable to get postgres container host: %s", err.Error())
 	}
 
-	return pg, host
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=disable",
+		dbUser, dbPassword, dbHost, dbName)
+
+	conn, err := pgx.Connect(context.Background(), connStr)
+	if err != nil {
+		log.Panicf("Unable to connect to postgres container via %s: %s", connStr,
+			err.Error())
+	}
+
+	return pg, conn
 }
 
 func Test_NewRepository(t *testing.T) {
-	conn, err := sqlx.Connect("pgx", pgConn)
-	if err != nil {
-		log.Panicf("Unable to connect to postgres via %s", pgConn)
-	}
-
-	repo.NewRepository[User](conn)
+	repo.NewRepository[User](pgConn, "pvd_test", "user")
 }
 
 func Test_NewRepository_PanicOnNil(t *testing.T) {
@@ -73,5 +70,5 @@ func Test_NewRepository_PanicOnNil(t *testing.T) {
 		}
 	}()
 
-	repo.NewRepository[User](nil)
+	repo.NewRepository[User](nil, "pvd_test", "user")
 }
