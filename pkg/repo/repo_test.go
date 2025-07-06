@@ -63,13 +63,20 @@ func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
 
 func count() int {
 	var count int
-	err := pgConn.QueryRow(context.Background(), "SELECT COUNT(*) FROM palo_verde.user").Scan(&count)
+	err := pgConn.QueryRow(context.Background(), "SELECT COUNT(*) FROM palo_verde.user;").Scan(&count)
 
 	if err != nil {
 		log.Panicf("unable to get user count: %s", err.Error())
 	}
 
 	return count
+}
+
+func cleanup() {
+	_, err := pgConn.Exec(context.Background(), "DELETE FROM palo_verde.user;")
+	if err != nil {
+		log.Panicf("unable to clean up table: %s", err.Error())
+	}
 }
 
 func Test_NewRepository(t *testing.T) {
@@ -91,20 +98,47 @@ func Test_Create(t *testing.T) {
 		t.Errorf("expected 0, got %d", count())
 	}
 
-	r := repo.NewRepository[User](pgConn, testSchema, "user")
-	u := User{
+	r := repo.NewRepository[User](pgConn, testSchema, testTable)
+	u1 := User{
 		Id:       uuid.New(),
-		Username: "TEST",
+		Username: "TEST_USER_1",
 		Created:  time.Now(),
 		LastSeen: time.Now(),
 	}
 
-	err := r.Create(u)
+	err := r.Create(u1)
 	if err != nil {
 		t.Errorf("error occured: %s", err.Error())
 	}
 
 	if count() != 1 {
 		t.Errorf("expected 1, got %d", count())
+	}
+
+	users := []User{
+		User{
+			Id:       uuid.New(),
+			Username: "TEST_USER_2",
+			Created:  time.Now(),
+			LastSeen: time.Now(),
+		}, User{
+			Id:       uuid.New(),
+			Username: "TEST_USER_3",
+			Created:  time.Now(),
+			LastSeen: time.Now(),
+		},
+	}
+
+	err = r.Create(users...)
+	if err != nil {
+		t.Errorf("error occured: %s", err.Error())
+	}
+
+	if count() != 3 {
+		t.Errorf("expected 3, got %d", count())
+	}
+
+	if cleanup(); count() != 0 {
+		t.Errorf("expected 0, got %d", count())
 	}
 }
