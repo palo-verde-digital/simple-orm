@@ -12,12 +12,49 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type QueryCondition interface {
+type Condition interface {
 	build() string
 }
 
-type ComparisonCondition struct {
+type Comparison struct {
 	op, operand1, operand2 string
+}
+
+func (c *Comparison) build() string {
+	return c.operand1 + " " + c.op + " " + c.operand2
+}
+
+func Eq(op1, op2 string) Comparison {
+	return Comparison{op: "=", operand1: op1, operand2: op2}
+}
+
+func NotEq(op1, op2 string) Comparison {
+	return Comparison{op: "<>", operand1: op1, operand2: op2}
+}
+
+func Less(op1, op2 string) Comparison {
+	return Comparison{op: "<", operand1: op1, operand2: op2}
+}
+
+func LessEq(op1, op2 string) Comparison {
+	return Comparison{op: "<=", operand1: op1, operand2: op2}
+}
+
+func Greater(op1, op2 string) Comparison {
+	return Comparison{op: ">", operand1: op1, operand2: op2}
+}
+
+func GreaterEq(op1, op2 string) Comparison {
+	return Comparison{op: ">", operand1: op1, operand2: op2}
+}
+
+type Logical struct {
+	op     string
+	c1, c2 Condition
+}
+
+func (l *Logical) build() string {
+	return fmt.Sprintf("(%s) %s (%s)", l.c1.build(), l.op, l.c2.build())
 }
 
 type Repository[T any] struct {
@@ -133,4 +170,8 @@ func (r *Repository[T]) Create(entities ...T) error {
 	}
 
 	return nil
+}
+
+func (r *Repository[T]) Read(where Condition) ([]T, error) {
+	return nil, nil
 }
