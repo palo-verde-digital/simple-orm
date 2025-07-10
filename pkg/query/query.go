@@ -120,11 +120,10 @@ func ValueOf(v reflect.Value) (interface{}, error) {
 		return v.Bool(), nil
 
 	case reflect.Array, reflect.Slice:
-		// Handle UUID specifically
 		if u, isUUID := v.Interface().(uuid.UUID); isUUID {
 			return u.String(), nil
 		}
-		// Handle byte slices
+
 		if v.Type().Elem().Kind() == reflect.Uint8 {
 			return v.Bytes(), nil
 		}
@@ -137,11 +136,11 @@ func ValueOf(v reflect.Value) (interface{}, error) {
 		return ValueOf(v.Elem())
 
 	case reflect.Struct:
-		// Handle time.Time specifically
+
 		if t, isTime := v.Interface().(time.Time); isTime {
 			return t, nil
 		}
-		// Handle UUID if it's a struct (some UUID implementations)
+
 		if u, isUUID := v.Interface().(uuid.UUID); isUUID {
 			return u.String(), nil
 		}
