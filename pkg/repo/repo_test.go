@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+	"github.com/palo-verde-digital/simple-orm/pkg/query"
 	"github.com/palo-verde-digital/simple-orm/pkg/repo"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -26,13 +28,13 @@ var (
 )
 
 type User struct {
-	Id       uuid.UUID `column:"id" relation:"PK"`
-	Username string    `column:"username"`
-	Created  time.Time `column:"created"`
-	LastSeen time.Time `column:"last_seen"`
+	Id       uuid.UUID `db:"id" relation:"PK"`
+	Username string    `db:"username"`
+	Created  time.Time `db:"created"`
+	LastSeen time.Time `db:"last_seen"`
 }
 
-func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
+func newPg() (*postgres.PostgresContainer, *sqlx.DB) {
 	ctx := context.Background()
 
 	pg, err := postgres.Run(ctx, "postgres:16-alpine",
@@ -47,12 +49,12 @@ func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
 		log.Panicf("unable to create postgres container: %s", err.Error())
 	}
 
-	connStr, err := pg.ConnectionString(ctx)
+	connStr, err := pg.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		log.Panicf("unable to get postgres conn str: %s", err.Error())
 	}
 
-	conn, err := pgx.Connect(ctx, connStr)
+	conn, err := sqlx.Connect("postgres", connStr)
 	if err != nil {
 		log.Panicf("unable to connect to postgres container via %s: %s", connStr,
 			err.Error())
@@ -63,7 +65,7 @@ func newPg() (*postgres.PostgresContainer, *pgx.Conn) {
 
 func count() int {
 	var count int
-	err := pgConn.QueryRow(context.Background(), "SELECT COUNT(*) FROM palo_verde.user;").Scan(&count)
+	err := pgConn.QueryRow("SELECT COUNT(*) FROM palo_verde.user;").Scan(&count)
 
 	if err != nil {
 		log.Panicf("unable to get user count: %s", err.Error())
@@ -73,7 +75,7 @@ func count() int {
 }
 
 func cleanup() {
-	_, err := pgConn.Exec(context.Background(), "DELETE FROM palo_verde.user;")
+	_, err := pgConn.Exec("DELETE FROM palo_verde.user;")
 	if err != nil {
 		log.Panicf("unable to clean up table: %s", err.Error())
 	}
@@ -99,12 +101,7 @@ func Test_Create(t *testing.T) {
 	}
 
 	r := repo.NewRepository[User](pgConn, testSchema, testTable)
-	u1 := User{
-		Id:       uuid.New(),
-		Username: "TEST_USER_1",
-		Created:  time.Now(),
-		LastSeen: time.Now(),
-	}
+	u1 := User{Id: uuid.New(), Username: "TEST_USER_1", Created: time.Now(), LastSeen: time.Now()}
 
 	err := r.Create(u1)
 	if err != nil {
@@ -116,17 +113,8 @@ func Test_Create(t *testing.T) {
 	}
 
 	users := []User{
-		User{
-			Id:       uuid.New(),
-			Username: "TEST_USER_2",
-			Created:  time.Now(),
-			LastSeen: time.Now(),
-		}, User{
-			Id:       uuid.New(),
-			Username: "TEST_USER_3",
-			Created:  time.Now(),
-			LastSeen: time.Now(),
-		},
+		User{Id: uuid.New(), Username: "TEST_USER_2", Created: time.Now(), LastSeen: time.Now()},
+		User{Id: uuid.New(), Username: "TEST_USER_3", Created: time.Now(), LastSeen: time.Now()},
 	}
 
 	err = r.Create(users...)
@@ -140,5 +128,51 @@ func Test_Create(t *testing.T) {
 
 	if cleanup(); count() != 0 {
 		t.Errorf("expected 0, got %d", count())
+	}
+}
+
+func Test_Read(t *testing.T) {
+	if count() != 0 {
+		t.Errorf("expected 0, got %d", count())
+	}
+
+	r := repo.NewRepository[User](pgConn, testSchema, testTable)
+	users := []User{
+		User{Id: uuid.New(), Username: "TEST_USER_1", Created: time.Now(), LastSeen: time.Now()},
+		User{Id: uuid.New(), Username: "TEST_USER_2", Created: time.Now(), LastSeen: time.Now()},
+		User{Id: uuid.New(), Username: "TEST_USER_3", Created: time.Now(), LastSeen: time.Now()},
+	}
+
+	err := r.Create(users...)
+	if err != nil {
+		t.Errorf("error occured: %s", err.Error())
+	}
+
+	result, err := r.Read(query.All(), 1)
+	if err != nil {
+		t.Errorf("error occured: %s", err.Error())
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1, got %d", len(result))
+	}
+
+	result, err = r.Read(query.Eq("id", users[0].Id), 0)
+	if err != nil {
+		t.Errorf("error occured: %s", err.Error())
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1, got %d", len(result))
+	}
+
+	where := query.Or(query.Eq("username", "TEST_USER_2"), query.Eq("username", "TEST_USER_3"))
+	result, err = r.Read(where, 0)
+	if err != nil {
+		t.Errorf("error occured: %s", err.Error())
+	}
+
+	if len(result) != 2 {
+		t.Errorf("expected 2, got %d", len(result))
 	}
 }
