@@ -1,4 +1,4 @@
-package query
+package orm
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 type Condition interface {
-	Build() (string, []any)
+	build() (string, []any)
 }
 
 func fixArgs(expr string) string {
@@ -37,7 +37,7 @@ type comparison struct {
 	operand    any
 }
 
-func (c comparison) Build() (string, []any) {
+func (c comparison) build() (string, []any) {
 	return c.column + " " + c.op + " $1", []any{c.operand}
 }
 
@@ -70,9 +70,9 @@ type logical struct {
 	c1, c2 Condition
 }
 
-func (l logical) Build() (string, []any) {
-	condition1, arg1 := l.c1.Build()
-	condition2, arg2 := l.c2.Build()
+func (l logical) build() (string, []any) {
+	condition1, arg1 := l.c1.build()
+	condition2, arg2 := l.c2.build()
 
 	queryStr := fmt.Sprintf("(%s) %s (%s)", condition1, l.op, condition2)
 	queryStr = fixArgs(queryStr)
@@ -90,7 +90,7 @@ func Or(c1, c2 Condition) Condition {
 
 type allRows struct{}
 
-func (a allRows) Build() (string, []any) {
+func (a allRows) build() (string, []any) {
 	return "", nil
 }
 
@@ -106,53 +106,40 @@ func ValueOf(v reflect.Value) (interface{}, error) {
 	switch v.Kind() {
 	case reflect.String:
 		return v.String(), nil
-
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v.Int(), nil
-
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return v.Uint(), nil
-
 	case reflect.Float32, reflect.Float64:
 		return v.Float(), nil
-
 	case reflect.Bool:
 		return v.Bool(), nil
-
 	case reflect.Array, reflect.Slice:
-		// Handle UUID specifically
 		if u, isUUID := v.Interface().(uuid.UUID); isUUID {
 			return u.String(), nil
 		}
-		// Handle byte slices
 		if v.Type().Elem().Kind() == reflect.Uint8 {
 			return v.Bytes(), nil
 		}
 		return nil, fmt.Errorf("unsupported array/slice type: %s", v.Type())
-
 	case reflect.Pointer:
 		if v.IsNil() {
 			return nil, nil
 		}
 		return ValueOf(v.Elem())
-
 	case reflect.Struct:
-		// Handle time.Time specifically
 		if t, isTime := v.Interface().(time.Time); isTime {
 			return t, nil
 		}
-		// Handle UUID if it's a struct (some UUID implementations)
 		if u, isUUID := v.Interface().(uuid.UUID); isUUID {
 			return u.String(), nil
 		}
 		return nil, fmt.Errorf("unsupported struct type: %s", v.Type())
-
 	case reflect.Interface:
 		if v.IsNil() {
 			return nil, nil
 		}
 		return ValueOf(v.Elem())
-
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", v.Kind())
 	}

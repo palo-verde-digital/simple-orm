@@ -1,4 +1,4 @@
-package repo
+package orm
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/palo-verde-digital/simple-orm/pkg/query"
 )
 
 type Repository[T any] struct {
@@ -22,12 +21,12 @@ type column struct {
 	name, field string
 }
 
-func NewRepository[T any](conn *sqlx.DB, schema, table string) *Repository[T] {
+func NewRepository[T any](conn *sqlx.DB, schema, table string) (*Repository[T], error) {
 	t := reflect.TypeFor[T]()
 	log.Printf("creating Repository[%s]", t.Name())
 
 	if conn == nil || conn.Ping() != nil {
-		log.Panicf("Invalid DB connection supplied to Repository[%s]", t.Name())
+		return nil, fmt.Errorf("Invalid DB connection supplied to Repository[%s]", t.Name())
 	}
 
 	log.Printf("verified Repository[%s] conn", t.Name())
@@ -48,7 +47,11 @@ func NewRepository[T any](conn *sqlx.DB, schema, table string) *Repository[T] {
 	for i, col := range columns {
 		columnNames[i] = col.name
 	}
-	columnStr := strings.Join(columnNames, ", ")
+
+	placeholders := make([]string, len(columnNames))
+	for i, name := range columnNames {
+		placeholders[i] = ":" + name
+	}
 
 	log.Printf("found %d columns for entity type %s", len(columns), t.Name())
 
@@ -58,9 +61,9 @@ func NewRepository[T any](conn *sqlx.DB, schema, table string) *Repository[T] {
 		table:   table,
 		columns: columns,
 
-		ins: fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (:%s);", schema, table, columnStr, strings.Join(columnNames, ", :")),
-		sel: fmt.Sprintf("SELECT %s FROM %s.%s", columnStr, schema, table),
-	}
+		ins: fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s);", schema, table, strings.Join(columnNames, ", "), strings.Join(placeholders, ", ")),
+		sel: fmt.Sprintf("SELECT %s FROM %s.%s", strings.Join(columnNames, ", "), schema, table),
+	}, nil
 }
 
 func (r *Repository[T]) Create(entities ...T) error {
@@ -70,10 +73,10 @@ func (r *Repository[T]) Create(entities ...T) error {
 	return err
 }
 
-func (r *Repository[T]) Read(filter query.Condition, limit int) ([]T, error) {
+func (r *Repository[T]) Read(filter Condition, limit int) ([]T, error) {
 	sel := r.sel
 
-	where, args := filter.Build()
+	where, args := filter.build()
 	if where != "" {
 		sel = sel + " WHERE " + where
 	}
