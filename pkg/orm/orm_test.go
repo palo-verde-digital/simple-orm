@@ -126,17 +126,19 @@ func Test_Create(t *testing.T) {
 
 func Test_Read(t *testing.T) {
 	tests := map[string]struct {
-		c        orm.Condition
+		where    orm.Condition
 		lim, len int
 	}{
-		"limit":     {c: orm.All(), lim: 1, len: 1},
-		"all":       {c: orm.All(), lim: 0, len: 3},
-		"eq":        {c: orm.Eq("username", "TEST_USER_1"), lim: 0, len: 1},
-		"notEq":     {c: orm.NotEq("logins", 18), lim: 0, len: 2},
-		"less":      {c: orm.Less("logins", 18), lim: 0, len: 0},
-		"lessEq":    {c: orm.LessEq("logins", 25), lim: 0, len: 2},
-		"greater":   {c: orm.Greater("logins", 18), lim: 0, len: 2},
-		"greaterEq": {c: orm.GreaterEq("logins", 18), lim: 0, len: 3},
+		"limit":     {where: orm.All(), lim: 1, len: 1},
+		"all":       {where: orm.All(), lim: 0, len: 3},
+		"eq":        {where: orm.Eq("username", "TEST_USER_1"), lim: 0, len: 1},
+		"notEq":     {where: orm.NotEq("logins", 18), lim: 0, len: 2},
+		"less":      {where: orm.Less("logins", 18), lim: 0, len: 0},
+		"lessEq":    {where: orm.LessEq("logins", 25), lim: 0, len: 2},
+		"greater":   {where: orm.Greater("logins", 18), lim: 0, len: 2},
+		"greaterEq": {where: orm.GreaterEq("logins", 18), lim: 0, len: 3},
+		"and":       {where: orm.And(orm.Greater("logins", 20), orm.Eq("id", users[1].Id)), lim: 0, len: 1},
+		"or":        {where: orm.Or(orm.Eq("username", "TEST_USER_2"), orm.Eq("username", "TEST_USER_3")), lim: 0, len: 2},
 	}
 
 	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
@@ -151,7 +153,7 @@ func Test_Read(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			result, err := r.Read(test.c, test.lim)
+			result, err := r.Read(test.where, test.lim)
 			if err != nil {
 				t.Fatalf("unexpected error occurred: %s", err.Error())
 			}
@@ -163,4 +165,150 @@ func Test_Read(t *testing.T) {
 	}
 
 	cleanup()
+}
+
+func Test_Update(t *testing.T) {
+	tests := map[string]struct {
+		where, verify orm.Condition
+		found         int
+		updates       map[string]any
+	}{
+		"all": {
+			where:  orm.All(),
+			verify: orm.Eq("username", "TEST_USER"),
+			found:  3,
+			updates: map[string]any{
+				"username": "TEST_USER",
+			},
+		},
+		"eq": {
+			where:  orm.Eq("username", "TEST_USER_1"),
+			verify: orm.Eq("logins", 0),
+			found:  1,
+			updates: map[string]any{
+				"logins": 0,
+			},
+		},
+		"notEq": {
+			where:  orm.NotEq("username", "TEST_USER_1"),
+			verify: orm.Eq("logins", 0),
+			found:  2,
+			updates: map[string]any{
+				"logins": 0,
+			},
+		},
+		"less": {
+			where:  orm.Less("logins", 20),
+			verify: orm.Eq("logins", 0),
+			found:  1,
+			updates: map[string]any{
+				"logins": 0,
+			},
+		},
+		"lessEq": {
+			where:  orm.LessEq("logins", 25),
+			verify: orm.Eq("logins", 0),
+			found:  2,
+			updates: map[string]any{
+				"logins": 0,
+			},
+		},
+		"greater": {
+			where:  orm.Greater("logins", 18),
+			verify: orm.Eq("logins", 0),
+			found:  2,
+			updates: map[string]any{
+				"logins": 0,
+			},
+		},
+		"greaterEq": {
+			where:  orm.GreaterEq("logins", 18),
+			verify: orm.Eq("logins", 0),
+			found:  3,
+			updates: map[string]any{
+				"logins": 0,
+			},
+		},
+		"and": {
+			where:  orm.And(orm.Greater("logins", 20), orm.Eq("id", users[1].Id)),
+			verify: orm.Eq("username", "MODIFIED_USERNAME"),
+			found:  1,
+			updates: map[string]any{
+				"username": "MODIFIED_USERNAME",
+			},
+		},
+		"or": {
+			where:  orm.Or(orm.Eq("username", "TEST_USER_2"), orm.Eq("username", "TEST_USER_3")),
+			verify: orm.Eq("username", "MODIFIED_USERNAME"),
+			found:  2,
+			updates: map[string]any{
+				"username": "MODIFIED_USERNAME",
+			},
+		},
+	}
+
+	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
+	if err != nil {
+		t.Fatalf("unexpected error occurred: %s", err.Error())
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err = r.Create(users...); err != nil {
+				t.Fatalf("unexpected error occurred: %s", err.Error())
+			}
+
+			err := r.Update(test.updates, test.where)
+			if err != nil {
+				t.Fatalf("unexpected error occurred: %s", err.Error())
+			}
+
+			res, err := r.Read(test.verify, 0)
+			if len(res) != test.found {
+				t.Errorf("expected %d, got %d", test.found, len(res))
+			}
+
+			cleanup()
+		})
+	}
+}
+
+func Test_Delete(t *testing.T) {
+	tests := map[string]struct {
+		where orm.Condition
+		rem   int
+	}{
+		"all":       {where: orm.All(), rem: 0},
+		"eq":        {where: orm.Eq("username", "TEST_USER_1"), rem: 2},
+		"notEq":     {where: orm.NotEq("logins", 18), rem: 1},
+		"less":      {where: orm.Less("logins", 18), rem: 3},
+		"lessEq":    {where: orm.LessEq("logins", 25), rem: 1},
+		"greater":   {where: orm.Greater("logins", 18), rem: 1},
+		"greaterEq": {where: orm.GreaterEq("logins", 18), rem: 0},
+		"and":       {where: orm.And(orm.Greater("logins", 20), orm.Eq("id", users[1].Id)), rem: 2},
+		"or":        {where: orm.Or(orm.Eq("username", "TEST_USER_2"), orm.Eq("username", "TEST_USER_3")), rem: 1},
+	}
+
+	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
+	if err != nil {
+		t.Fatalf("unexpected error occurred: %s", err.Error())
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err = r.Create(users...); err != nil {
+				t.Fatalf("unexpected error occurred: %s", err.Error())
+			}
+
+			if err = r.Delete(test.where); err != nil {
+				t.Fatalf("unexpected error occurred: %s", err.Error())
+			}
+
+			if where := count(); where != test.rem {
+				t.Errorf("expected %d, got %d", test.rem, where)
+			}
+
+			cleanup()
+		})
+	}
 }
