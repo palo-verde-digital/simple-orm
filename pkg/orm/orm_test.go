@@ -80,7 +80,7 @@ func count() int {
 	return count
 }
 
-func cleanup() {
+func flush() {
 	_, err := pgConn.Exec("DELETE FROM palo_verde.user;")
 	if err != nil {
 		log.Panicf("unable to clean up table: %s", err.Error())
@@ -121,7 +121,7 @@ func Test_Create(t *testing.T) {
 		t.Errorf("expected 3, got %d", count())
 	}
 
-	cleanup()
+	flush()
 }
 
 func Test_Read(t *testing.T) {
@@ -164,7 +164,7 @@ func Test_Read(t *testing.T) {
 		})
 	}
 
-	cleanup()
+	flush()
 }
 
 func Test_Update(t *testing.T) {
@@ -268,7 +268,7 @@ func Test_Update(t *testing.T) {
 				t.Errorf("expected %d, got %d", test.found, len(res))
 			}
 
-			cleanup()
+			flush()
 		})
 	}
 }
@@ -308,7 +308,7 @@ func Test_Delete(t *testing.T) {
 				t.Errorf("expected %d, got %d", test.rem, where)
 			}
 
-			cleanup()
+			flush()
 		})
 	}
 }
