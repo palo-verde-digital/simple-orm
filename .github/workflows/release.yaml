@@ -20,11 +20,19 @@ jobs:
         go mod tidy
         go test ./...
 
+    - name: Calculate Release Tag
+      id: tag
+      uses: softprops/action-gh-release@v2
+      with:
+        main_branch: main
+        create_tag: true
+        tag_prefix: v
+
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
         main_branch: main
         draft: false
         prerelease: false
-        create_tag: true
+        tag_name: ${{ steps.tag.outputs.version }}
         generate_release_notes: true
