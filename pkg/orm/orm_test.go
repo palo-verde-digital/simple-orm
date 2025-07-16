@@ -98,10 +98,12 @@ func Test_NewRepository(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+
 			_, err := orm.NewRepository[User](test.conn, testSchema, testTable)
 			if err != nil && !test.hasErr {
 				t.Fatalf("unexpected error occurred: %s", err.Error())
 			}
+
 		})
 	}
 }
@@ -153,6 +155,7 @@ func Test_Read(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+
 			result, err := r.Read(test.where, test.lim)
 			if err != nil {
 				t.Fatalf("unexpected error occurred: %s", err.Error())
@@ -161,6 +164,7 @@ func Test_Read(t *testing.T) {
 			if len(result) != test.len {
 				t.Errorf("expected %d, got %d", test.len, len(result))
 			}
+
 		})
 	}
 
@@ -254,6 +258,7 @@ func Test_Update(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+
 			if err = r.Create(users...); err != nil {
 				t.Fatalf("unexpected error occurred: %s", err.Error())
 			}
@@ -269,6 +274,7 @@ func Test_Update(t *testing.T) {
 			}
 
 			flush()
+
 		})
 	}
 }
@@ -296,6 +302,7 @@ func Test_Delete(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+
 			if err = r.Create(users...); err != nil {
 				t.Fatalf("unexpected error occurred: %s", err.Error())
 			}
@@ -309,6 +316,7 @@ func Test_Delete(t *testing.T) {
 			}
 
 			flush()
+
 		})
 	}
 }
