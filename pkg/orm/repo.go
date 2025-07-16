@@ -10,19 +10,13 @@ import (
 )
 
 type Repository[T any] struct {
-	conn          *sqlx.DB
-	schema, table string
-	columns       []column
-
-	ins, sel, upd, del string
+	conn  *sqlx.DB
+	table *table[T]
 }
 
-type column struct {
-	name, field string
-}
-
-func NewRepository[T any](conn *sqlx.DB, schema, table string) (*Repository[T], error) {
+func NewRepository[T any](conn *sqlx.DB, schemaName, tableName string) (*Repository[T], error) {
 	t := reflect.TypeFor[T]()
+
 	log.Printf("creating Repository[%s]", t.Name())
 
 	if conn == nil || conn.Ping() != nil {
@@ -31,52 +25,26 @@ func NewRepository[T any](conn *sqlx.DB, schema, table string) (*Repository[T], 
 
 	log.Printf("verified Repository[%s] conn", t.Name())
 
-	columns := []column{}
-	for i := range t.NumField() {
-		if columnName := t.Field(i).Tag.Get("db"); columnName != "" {
-			col := column{
-				name:  columnName,
-				field: t.Field(i).Name,
-			}
-
-			columns = append(columns, col)
-		}
+	table, err := newTable[T](schemaName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid entity %s: %s", t.Name(), err.Error())
 	}
-
-	columnNames := make([]string, len(columns))
-	for i, col := range columns {
-		columnNames[i] = col.name
-	}
-
-	placeholders := make([]string, len(columnNames))
-	for i, name := range columnNames {
-		placeholders[i] = ":" + name
-	}
-
-	log.Printf("found %d columns for entity type %s", len(columns), t.Name())
 
 	return &Repository[T]{
-		conn:    conn,
-		schema:  schema,
-		table:   table,
-		columns: columns,
-
-		ins: fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s);", schema, table, strings.Join(columnNames, ", "), strings.Join(placeholders, ", ")),
-		sel: fmt.Sprintf("SELECT %s FROM %s.%s", strings.Join(columnNames, ", "), schema, table),
-		upd: fmt.Sprintf("UPDATE %s.%s SET ", schema, table),
-		del: fmt.Sprintf("DELETE FROM %s.%s", schema, table),
+		conn:  conn,
+		table: table,
 	}, nil
 }
 
 func (r *Repository[T]) Create(entities ...T) error {
-	log.Printf("executing: %s for %d %s(s)", r.ins, len(entities), reflect.TypeFor[T]().Name())
+	log.Printf("executing: %s for %d %s(s)", r.table.ins, len(entities), reflect.TypeFor[T]().Name())
 
-	_, err := r.conn.NamedExec(r.ins, entities)
+	_, err := r.conn.NamedExec(r.table.ins, entities)
 	return err
 }
 
 func (r *Repository[T]) Read(filter Condition, limit int) ([]T, error) {
-	sel := r.sel
+	sel := r.table.sel
 
 	where, args := filter.build()
 	if where != "" {
@@ -109,7 +77,7 @@ func (r *Repository[T]) Read(filter Condition, limit int) ([]T, error) {
 }
 
 func (r *Repository[T]) Update(updates map[string]any, filter Condition) error {
-	upd := r.upd
+	upd := r.table.upd
 
 	i, expressions, args := 1, []string{}, []any{}
 	for col, arg := range updates {
@@ -135,7 +103,7 @@ func (r *Repository[T]) Update(updates map[string]any, filter Condition) error {
 }
 
 func (r *Repository[T]) Delete(filter Condition) error {
-	del := r.del
+	del := r.table.del
 
 	where, args := filter.build()
 	if where != "" {
