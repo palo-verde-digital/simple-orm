@@ -2,6 +2,12 @@ name: Test and tag Go module
 
 on: 
   push:
+    branches:
+      - main
+    paths-ignore:
+      - .github/**
+      - sql/**
+      - README.md
 
 jobs:
   tag:
