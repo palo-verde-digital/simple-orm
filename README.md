@@ -68,7 +68,7 @@ Query for records
 ```go
 package orm
 
-// limit < 0 will not be applied
+// limit <= 0 will not be applied
 func (r *Repository[T]) Read(filter Condition, limit int) ([]T, error)
 
 // filter conditions are obtained by providing the column and operand
