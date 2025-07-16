@@ -33,4 +33,3 @@ jobs:
       with:
         create_tag: true
         tag_prefix: v
-        initial_version: 0.0.1
