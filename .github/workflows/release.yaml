@@ -3,7 +3,7 @@ name: Release Go module
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*'
 
 jobs:
   release:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Release
         uses: softprops/action-gh-release@v2
     
