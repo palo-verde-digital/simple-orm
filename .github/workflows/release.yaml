@@ -22,7 +22,7 @@ jobs:
 
     - name: Calculate Release Tag
       id: tag
-      uses: softprops/action-gh-release@v2
+      uses: bitshifted/git-auto-semver@v2
       with:
         create_tag: true
         tag_prefix: v
