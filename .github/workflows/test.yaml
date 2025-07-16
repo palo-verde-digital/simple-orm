@@ -1,0 +1,29 @@
+name: Test Go module
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - .github/**
+      - sql/**
+      - README.md
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Test
+      run: |
+        go mod tidy
+        go test ./...
