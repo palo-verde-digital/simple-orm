@@ -1,37 +1,19 @@
-name: Test and release Go package
+name: Release Go module
 
-on: 
+on:
   push:
+    tags:
+      - "v*.*.*"
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Test
-      run: |
-        go mod tidy
-        go test ./...
-
-    - name: Calculate Release Tag
-      id: tag
-      uses: bitshifted/git-auto-semver@v2
-      with:
-        create_tag: true
-        tag_prefix: v
-
-    - name: Release
-      uses: softprops/action-gh-release@v2
-      with:
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        tag_name: ${{ steps.tag.outputs.version }}
-        token: ${{ github.token }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Release
+        uses: softprops/action-gh-release@v2
+    

@@ -1,0 +1,30 @@
+name: Test and tag Go module
+
+on: 
+  push:
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Test
+      run: |
+        go mod tidy
+        go test ./...
+
+    - name: Calculate Release Tag
+      uses: bitshifted/git-auto-semver@v2
+      with:
+        create_tag: true
+        tag_prefix: v
+        initial_version: 0.0.1
