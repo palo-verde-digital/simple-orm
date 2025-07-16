@@ -58,22 +58,22 @@ func (r *Repository[T]) Read(filter Condition, limit int) ([]T, error) {
 	sel = sel + ";"
 	log.Printf("executing: %s", sel)
 
-	rows, err := r.conn.Queryx(sel, args...)
+	result, err := r.conn.Queryx(sel, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	var found []T
-	for rows.Next() {
+	var rows []T
+	for result.Next() {
 		var row T
-		err := rows.StructScan(&row)
+		err := result.StructScan(&row)
 		if err != nil {
 			return nil, err
 		}
-		found = append(found, row)
+		rows = append(rows, row)
 	}
 
-	return found, nil
+	return rows, nil
 }
 
 func (r *Repository[T]) Update(updates map[string]any, filter Condition) error {
