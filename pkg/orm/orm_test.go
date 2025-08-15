@@ -18,8 +18,8 @@ const (
 	dbUser     = "pvdAdmin"
 	dbPassword = "pvdAssword"
 
-	testSchema = "palo_verde"
-	testTable  = "user"
+	testSchema              = "palo_verde"
+	userTable, sessionTable = "user", "session"
 )
 
 var (
@@ -30,6 +30,10 @@ var (
 		User{Id: uuid.New(), Username: "TEST_USER_2", Logins: 25, Created: time.Now(), LastSeen: time.Now()},
 		User{Id: uuid.New(), Username: "TEST_USER_3", Logins: 40, Created: time.Now(), LastSeen: time.Now()},
 	}
+
+	sessions = []Session{
+		Session{Id: uuid.New(), Created: time.Now(), User: &users[0]},
+	}
 )
 
 type User struct {
@@ -38,6 +42,12 @@ type User struct {
 	Logins   int       `db:"logins"`
 	Created  time.Time `db:"created"`
 	LastSeen time.Time `db:"last_seen"`
+}
+
+type Session struct {
+	Id      uuid.UUID `db:"id" relation:"PK"`
+	Created time.Time `db:"created"`
+	User    *User     `db:"user_id" relation:"FK" ft:"user" fk:"id"`
 }
 
 func newPg() (*postgres.PostgresContainer, *sqlx.DB) {
@@ -99,7 +109,7 @@ func Test_NewRepository(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 
-			_, err := orm.NewRepository[User](test.conn, testSchema, testTable)
+			_, err := orm.NewRepository[User](test.conn, testSchema, userTable)
 			if err != nil && !test.hasErr {
 				t.Fatalf("unexpected error occurred: %s", err.Error())
 			}
@@ -109,7 +119,7 @@ func Test_NewRepository(t *testing.T) {
 }
 
 func Test_Create(t *testing.T) {
-	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
+	r, err := orm.NewRepository[User](pgConn, testSchema, userTable)
 	if err != nil {
 		t.Fatalf("unexpected error occurred: %s", err.Error())
 	}
@@ -143,7 +153,7 @@ func Test_Read(t *testing.T) {
 		"or":        {where: orm.Or(orm.Eq("username", "TEST_USER_2"), orm.Eq("username", "TEST_USER_3")), lim: 0, len: 2},
 	}
 
-	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
+	r, err := orm.NewRepository[User](pgConn, testSchema, userTable)
 	if err != nil {
 		t.Fatalf("unexpected error occurred: %s", err.Error())
 	}
@@ -249,7 +259,7 @@ func Test_Update(t *testing.T) {
 		},
 	}
 
-	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
+	r, err := orm.NewRepository[User](pgConn, testSchema, userTable)
 	if err != nil {
 		t.Fatalf("unexpected error occurred: %s", err.Error())
 	}
@@ -291,7 +301,7 @@ func Test_Delete(t *testing.T) {
 		"or":        {where: orm.Or(orm.Eq("username", "TEST_USER_2"), orm.Eq("username", "TEST_USER_3")), rem: 1},
 	}
 
-	r, err := orm.NewRepository[User](pgConn, testSchema, testTable)
+	r, err := orm.NewRepository[User](pgConn, testSchema, userTable)
 	if err != nil {
 		t.Fatalf("unexpected error occurred: %s", err.Error())
 	}

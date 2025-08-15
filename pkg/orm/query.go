@@ -118,27 +118,33 @@ func ValueOf(v reflect.Value) (interface{}, error) {
 		if u, isUUID := v.Interface().(uuid.UUID); isUUID {
 			return u.String(), nil
 		}
+
 		if v.Type().Elem().Kind() == reflect.Uint8 {
 			return v.Bytes(), nil
 		}
+
 		return nil, fmt.Errorf("unsupported array/slice type: %s", v.Type())
 	case reflect.Pointer:
 		if v.IsNil() {
 			return nil, nil
 		}
+
 		return ValueOf(v.Elem())
 	case reflect.Struct:
 		if t, isTime := v.Interface().(time.Time); isTime {
 			return t, nil
 		}
+
 		if u, isUUID := v.Interface().(uuid.UUID); isUUID {
 			return u.String(), nil
 		}
+
 		return nil, fmt.Errorf("unsupported struct type: %s", v.Type())
 	case reflect.Interface:
 		if v.IsNil() {
 			return nil, nil
 		}
+
 		return ValueOf(v.Elem())
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", v.Kind())

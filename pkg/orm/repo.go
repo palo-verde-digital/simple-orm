@@ -11,7 +11,7 @@ import (
 
 type Repository[T any] struct {
 	conn  *sqlx.DB
-	table *table[T]
+	table *table
 }
 
 func NewRepository[T any](conn *sqlx.DB, schemaName, tableName string) (*Repository[T], error) {
@@ -25,7 +25,7 @@ func NewRepository[T any](conn *sqlx.DB, schemaName, tableName string) (*Reposit
 
 	log.Printf("verified Repository[%s] conn", t.Name())
 
-	table, err := newTable[T](schemaName, tableName)
+	table, err := newTable(t, schemaName, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid entity %s: %s", t.Name(), err.Error())
 	}

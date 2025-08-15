@@ -6,62 +6,135 @@ import (
 	"strings"
 )
 
+var (
+	tables = make(map[reflect.Type]*table)
+)
+
 type column struct {
-	name, field string
-	isPk, isFk  bool
+	columnName    string
+	isPk, isFk    bool
+	foreignColumn string
+	foreignTable  *table
 }
 
-type table[T any] struct {
-	schema, name string
-	pk           *column
-	columns      []*column
+type table struct {
+	schemaName, tableName string
+	primaryKey            *column
+	orderedColumns        []string
+	columns               map[string]*column
 
 	ins, sel, upd, del string
 }
 
-func newTable[T any](schema, name string) (*table[T], error) {
-	t := reflect.TypeFor[T]()
-	table := &table[T]{
-		schema:  schema,
-		name:    name,
-		pk:      nil,
-		columns: []*column{},
+func newTable(t reflect.Type, schemaName, tableName string) (*table, error) {
+	if cachedTable := tables[t]; cachedTable != nil {
+		return cachedTable, nil
 	}
 
-	columnNames := []string{}
-	columns := []*column{}
+	return createTable(t, schemaName, tableName)
+}
 
-	for i := range t.NumField() {
+func createTable(t reflect.Type, schemaName, tableName string) (*table, error) {
+	table := &table{
+		schemaName:     schemaName,
+		tableName:      tableName,
+		primaryKey:     nil,
+		orderedColumns: []string{},
+		columns:        make(map[string]*column),
+	}
+
+	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 
-		if columnName, rel := f.Tag.Get("db"), f.Tag.Get("relation"); columnName != "" {
-			column := &column{name: columnName, field: f.Name}
-
-			if rel == "PK" {
-				if table.pk != nil {
-					return nil, fmt.Errorf("multiple primary keys for %s: %s, %s",
-						t.Name(), table.pk.name, columnName)
-				}
-
-				column.isPk = true
-				table.pk = column
+		if f.Tag.Get("db") != "" {
+			column, err := createColumn(f, table, schemaName, tableName)
+			if err != nil {
+				return nil, err
 			}
 
-			columns = append(columns, column)
-			columnNames = append(columnNames, columnName)
+			table.columns[f.Name] = column
+			table.orderedColumns = append(table.orderedColumns, column.columnName)
 		}
 	}
 
-	placeholders := make([]string, len(columns))
-	for i := range columns {
-		placeholders[i] = ":" + columnNames[i]
+	generateQueries(table)
+
+	tables[t] = table
+	return table, nil
+}
+
+func createColumn(f reflect.StructField, t *table, schemaName, tableName string) (*column, error) {
+	columnName := f.Tag.Get("db")
+	rel := f.Tag.Get("relation")
+
+	column := &column{columnName: columnName}
+
+	if rel == "PK" {
+		if t.primaryKey != nil {
+			return nil, fmt.Errorf("multiple primary keys for %s: %s, %s",
+				t.tableName, t.primaryKey.columnName, columnName)
+		}
+
+		column.isPk = true
+		t.primaryKey = column
 	}
 
-	table.ins = fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s);", schema, name,
-		strings.Join(columnNames, ", "), strings.Join(placeholders, ", "))
-	table.sel = fmt.Sprintf("SELECT %s FROM %s.%s", strings.Join(columnNames, ", "), schema, name)
-	table.upd = fmt.Sprintf("UPDATE %s.%s SET ", schema, name)
-	table.del = fmt.Sprintf("DELETE FROM %s.%s", schema, name)
+	if rel == "FK" {
+		fTable := f.Tag.Get("ft")
+		if fTable == "" {
+			return nil, fmt.Errorf("foreign table for entity %s is missing", t.tableName)
+		}
 
-	return table, nil
+		fCol := f.Tag.Get("fk")
+		if fCol == "" {
+			return nil, fmt.Errorf("foreign key for entity %s field %s is missing", t.tableName, f.Name)
+		}
+
+		if f.Type.Kind() != reflect.Pointer {
+			return nil, fmt.Errorf("foreign key %s.%s is %s, expected %s",
+				tableName, fCol, f.Type.Kind().String(), reflect.Pointer.String())
+		}
+
+		if f.Type.Elem().Kind() != reflect.Struct {
+			return nil, fmt.Errorf("foreign key %s.%s element is %s, expected %s",
+				tableName, fCol, f.Type.Elem().Kind().String(), reflect.Struct.String())
+		}
+
+		column.isFk = true
+		column.foreignColumn = fCol
+
+		foreignTable, err := newTable(f.Type.Elem(), schemaName, fTable)
+		if err != nil {
+			return nil, err
+		}
+
+		column.foreignTable = foreignTable
+	}
+
+	return column, nil
+}
+
+func generateQueries(t *table) {
+	columnNames, placeholders := []string{}, []string{}
+
+	for i := range t.orderedColumns {
+		columnNames = append(columnNames, t.orderedColumns[i])
+		placeholders = append(placeholders, ":"+t.orderedColumns[i])
+	}
+
+	t.ins = fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
+		t.schemaName,
+		t.tableName,
+		strings.Join(columnNames, ", "),
+		strings.Join(placeholders, ", "),
+	)
+
+	t.sel = fmt.Sprintf("SELECT %s FROM %s.%s",
+		strings.Join(columnNames, ", "),
+		t.schemaName,
+		t.tableName,
+	)
+
+	t.upd = fmt.Sprintf("UPDATE %s.%s SET ", t.schemaName, t.tableName)
+	t.del = fmt.Sprintf("DELETE FROM %s.%s", t.schemaName, t.tableName)
 }
