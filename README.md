@@ -34,10 +34,17 @@ if err != nil {
 Column names must be provided via the `db` tag. If a field is not tagged, it is excluded from the queries and entity metadata computed when `NewRepository` is called.
 ```go
 type User struct {
-	Id       uuid.UUID `db:"id"`
+	Id       uuid.UUID `db:"id" relation:"PK"`
 	Username string    `db:"username"`
+	Logins   int       `db:"logins"`
 	Created  time.Time `db:"created"`
 	LastSeen time.Time `db:"last_seen"`
+}
+
+type Session struct {
+	Id      uuid.UUID `db:"id" relation:"PK"`
+	Created time.Time `db:"created"`
+	User    *User     `db:"user_id" relation:"FK" ft:"user" fk:"id"`
 }
 ```
 
